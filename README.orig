@@ -1,0 +1,14 @@
+linuxmag.vim is a syntax highlighting file for Linux Magazine articles.
+To install it,
+
+    1.	copy linuxmag.vim ~/.vim/syntax
+    2.  add the contents of filetype.vim to your ~/.vim/filetype.vim
+
+	or
+
+	whenever you're editing an article in vim and want
+	syntax highlighting, type:
+
+	    :setf linuxmag
+
+

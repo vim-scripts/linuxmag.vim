@@ -1,0 +1,311 @@
+HEAD: Power Tools
+DECK: Syntax Highlighting with Vim
+AUTHOR: John Beppu
+
+Text is structured.
+This is true whether the text is a program, a configuration file, or
+even prose.  Syntax highlighting is a feature that gives text editors a
+way to understand the structure of various kinds of text and then apply
+different colors to it based on this understanding.
+It makes the text you are editing look nice (or at least colorful), and
+the visual cues it provides can really speed up the editing process.
+
+Vim 6.0 comes with syntax highlighting files for over 300 different text
+file formats.  Most of them are for programming languages, a fair number
+of them are for configuration file formats, and there are a few weird
+ones to round things out.  You can find them sitting in your
+C<$VIMRUNTIME/syntax> directory.  (The value of C<$VIMRUNTIME> can be
+found by typing C<:echo $VIMRUNTIME> in Vim while in command mode.)
+
+In the unlikely event that Vim doesn't have a syntax highlighting file
+for the text you are editing, you could try writing your own.  It's
+fairly straightforward as long as you have a solid understanding of
+regular expressions.  As an example, a syntax highlighting file for
+Linux Magazine articles will be written.
+
+
+SUBHEAD: Defining the Syntax
+
+The editors of Linux Magazine use a simple system for marking up
+articles during the editing process.  It is similar in spirit to Perl's
+Plain Old Documentation (POD) format in that it's very lightweight and
+simple to use.  There are only a few syntax elements to recognize, and
+the regular expressions needed to match them are not that harsh.  See
+I<Listing 1> where you'll find I<linuxmag.vim>, and follow along as it
+is explained.
+
+By tradition, most syntax files start out with a comment that describes
+what it is, who's responsible, how recent it is, and where to go to find
+out more.  This is followed by an C<if> statement that exists for
+portability between the 5.x and 6.x series.
+Then, on line 15, Vim is told that the forthcoming syntax
+description will be case-sensitive.  Most syntax highlighting files
+start like this.
+
+Next comes the interesting part where the mark-up elements found in a
+Linux Magazine article are described in terms that Vim can understand.
+Linux Magazine articles always start out with a few headers that look
+like this:
+
+C<
+    HEAD: My Title
+    DECK: My Secondary Title
+    TOC_LINE: My blurb for the Table of Contents
+    AUTHOR: Me
+>
+
+To recognize headers of this style, we use the C<syn match> statement
+which lets us associate a regular expression with a syntax element.
+On line 16 of I<linuxmag.vim>.  It says that a C<linuxmagHeader> will match
+the regular expression, C</^[A-Z_]\+:/>.  The C<syn match> statement is
+very useful and we'll be using it again for other syntax elements.
+
+[ JSB: 
+    Note to the layout people: 
+    In the next sentence where it says,
+    'making text "B<bold>", "I<italic>", or "C<monospaced>"',
+    please leave the angled brackets and mark-up attributes as-is, 
+    so that the readers can see how the editors actually 
+    mark up the text. ]
+
+The next syntax element we describe is the C<linuxmagTextAttr> which is
+for making text "B<bold>", "I<italic>", or "C<monospaced>".  This should look
+very familiar to people who have used POD.  To match this syntax element,
+the C<syn region> statement is used.
+
+A region is a syntax element that starts with one regular expression and
+ends at another one.  On line 17, C<linuxmagTextAttr> is defined as
+starting with the letter "B", "C", or "I" followed by a "<", and ending
+with a ">".  To make it possible to arbitrarily nest these text
+attributes (for example, if you wanted something to be bold AND italic),
+C<linuxmagTextAttr> is defined such that it can contain other instances
+of itself.   (Recursive containment is a very common technique found in
+many syntax files.)
+
+On line 19, a special case for multi-line "C" attributes is defined as a
+C<linuxmagCodeBlock>.  Unlike a C<linuxmagTextAttr>, this region does
+not contain any other syntax elements, and it won't end until Vim sees a
+">" sitting on a line all by itself.  The "C" attribute is often used
+for code listings in Linux Magazine articles, and the ">" character
+comes up very frequently in source code.  This is unfortunate, because
+it makes C<linuxmagTextAttr> end prematurely, so a special case was
+needed for multi-line text that's wrapped in the "C" attribute.
+
+For fun, special syntax elements for matching URLs and email addresses
+are defined on lines 20 and 21.  This will highlight strings like
+"bram@moolenaar.net" and "http://www.vim.org/" in our text.
+Defining these elements was not strictly necessary, but it was simple
+enough to make regular expressions for them, so why not?
+
+Articles also have various "boxed" areas.  These contain bits of
+information that are pertinent to the article but are not part of the
+main body of text.  For example, this piece has a sidebar on 
+I<Advanced Syntax Highlighting>, another sidebar called I<Resources>
+with links to more information, and a program listing for I<linuxmag.vim>.
+The notation for marking up these boxed areas looks like this:
+
+C<
+    [ BEGIN SIDEBAR 1 - Advanced Syntax Highlighting ]
+
+    content...
+    tangential info...
+
+    [ END SIDEBAR 1 ]
+>
+
+On lines 22 and 23, the C<syn region> statement is used again to define
+regular expressions that will match the beginning and ending of these
+boxed sections.
+
+Finally, we come to comments which are the most important part of Linux
+Magazine's mark-up system.  Comments are important, because they facilitate
+communication between editors and authors.  They come in two varieties:
+
+C<
+    [ JSB: Some editors like to identify
+	themselves by starting their comment
+	with their initials in all-CAPS. ]
+
+    [ Editor's note -- Other editors
+	like to write comments that start with
+	a string like, "Editor's note". ]
+>
+
+There is nothing special about one comment notation over the other.
+They both serve the same purpose of adding little (or sometimes big) notes 
+in the places where more work needs to be done.  Having 2 different styles
+of comments makes matching a little harder, though.
+
+Lines 24 through 35 show the C<syn region> statement being used again to
+define what these 2 comment notations look like.  The C<contains> list
+is particularly long this time.  To highlight an editor's initials, a
+C<linuxmagEditor> syntax element was created.  To highlight strings like
+"TODO" and "FIXME", C<linuxmagNote> was created.  Notice that both of
+these syntax elements end their definitions with the word, C<contained>.
+This tells Vim to only look for these syntax elements in regions that
+explicitly include them in their C<contains> list.  Otherwise, Vim would
+try to match these patterns throughout the entire text when we really
+only wanted to look for these syntax elements inside comments.  Finally,
+the C<contains> lists finish with some mutual recursions, so that text
+that matches C<linuxmagComment1> and C<linuxmagComment2> can be
+arbitrarily nested within each other.  This concludes the syntax
+definition.
+
+
+SUBHEAD: Associating Syntax Elements with Color Groups
+
+The second half of a syntax highlighting file associates the syntax
+elements that were just defined with the standard color groups used by
+Vim.  You can find a list of these color groups by typing 
+C<:help group-name> while in command mode.
+Lines 46 through 56 use the C<HiLink> statement to make sensible bindings
+between the syntax elements and the color groups.
+
+Some of you may have noticed the C<if> statements that surround our
+list of C<HiLink> statements.  Their purpose is to make syntax
+highlighting files portable between different versions of Vim, and it's
+an idiom you will find in almost every syntax highlighting file.  It's
+the same sequence of C<if> statements every time, so it's not much
+of a hassle.
+
+The very last thing we have to do is state that this is the "linuxmag"
+syntax.  Our syntax highlighting file is now finished and ready to be
+installed.
+
+
+SUBHEAD: See the Difference
+
+Local installation is straightforward.  First, you have to put
+I<linuxmag.vim> in a place where Vim can find it when it starts up.
+Make a directory called I<$HOME/.vim/syntax> if you don't already
+have one, and put I<linuxmag.vim> in there.  
+The second step is to teach Vim how to recognize Linux Magazine
+articles.  If you don't already have a
+I<$HOME/.vim/filetype.vim>, create it, and add the following lines
+to it.
+
+C<
+augroup filetypedetect
+au BufNewFile,BufRead *.txt
+    \ setf linuxmag
+augroup END
+>
+
+To be expedient, we just say that any filename that matches
+C<*.txt> is a Linux Magazine article.  So now, if you ever
+want to write for Linux Magazine, and you happen to use Vim,
+you can do it in full syntax-highlighted glory.  
+
+Even if you never write for Linux Magazine, there's a chance that you
+may encounter a file format that Vim doesn't have syntax highlighting
+for.  When that time comes, you could probably write your own syntax
+highlighting file pretty quickly (as long as you have decent regular
+expression skills).  Then, if it's generally useful, you could
+even contribute it to the Vim project.  It's a useful skill to have.
+
+
+[ IMAGE: before-and-after-266dpi.png - Before and After ]
+
+
+BIO: John Beppu <beppu@cpan.org> remembers when he used to wonder why
+people liked Vim so much.
+
+[ BEGIN SIDEBAR 1 - Advanced Syntax Highlighting ]
+
+The example in this article if very basic.  To see the full power
+of Vim's syntax highlighting, try opening an XPM file in C<gvim>.
+
+[ IMAGE: gvim-xpm-266dpi.png - Drawing w/ GVim? ]
+
+[ END SIDEBAR 1 ]
+
+
+[ BEGIN SIDEBAR 2 - Resources ]
+
+Vim has some of the best online documentation you'll find anywhere,
+so instead of searching the net for information, you can just ask
+Vim itself by typing the following when in command mode.
+
+General Syntax Highlighting Info
+    :help syntax
+
+Troubleshooting
+    :help usr_06
+
+Writing syntax highlighting files
+    :help usr_44
+
+Standard Color Groups
+    :help group-name
+
+[ END SIDEBAR 2 ]
+
+
+[ BEGIN LISTING 1 - linuxmag.vim ]
+
+C<
+" Linux Magazine syntax file
+" Language:	Linux Magazine Article
+" Maintainer:	John Beppu <beppu@cpan.org>
+" Last Change:	2001 Nov 29
+" Location:	http://www.linux-mag.com/
+
+" for portability
+if version < 600
+  syntax clear
+elseif exists("b:current_syntax")
+  finish
+endif
+
+" define syntax elements
+syn case match
+syn match   linuxmagHeader /^[A-Z_]\+:/
+syn region  linuxmagTextAttr start=/[BCI]</ end=/>/ 
+    \ contains=linuxmagTextAttr
+syn region  linuxmagCodeBlock start=/^C<$/ end=/^>$/
+syn match   linuxmagURL /[a-z]\+:\/\/[A-Za-z0-9\-/~._%?&]\+/
+syn match   linuxmagEmail /\w\+@[A-Za-z0-9\-.]\+/
+syn region  linuxmagBoxBegin start=/\[ BEGIN/ end=/ ]/
+syn region  linuxmagBoxEnd start=/\[ END/ end=/ ]/
+syn region  linuxmagComment1 
+    \ start=/\[ \w\+:/ end=/]/ 
+     \ contains=linuxmagEditor,linuxmagNote,
+      \ linuxmagComment1,
+       \ linuxmagComment2
+syn region  linuxmagComment2 
+    \ start=/\[ Ed/ end=/]/ 
+     \ contains=linuxmagEditor,linuxmagNote,
+      \ linuxmagComment1,
+       \ linuxmagComment2
+syn match   linuxmagEditor /[A-Z]\+:/ contained
+syn keyword linuxmagNote TODO FIXME XXX contained
+
+" link syntax elements to standard highlighting groups
+if version >= 508 || !exists("did_linuxmag_syn_inits")
+  if version < 508
+    let did_linuxmag_syn_inits = 1
+    command -nargs=+ HiLink hi link <args>
+  else
+    command -nargs=+ HiLink hi def link <args>
+  endif
+
+  HiLink linuxmagHeader	    Keyword
+  HiLink linuxmagCodeBlock  String
+  HiLink linuxmagTextAttr   String
+  HiLink linuxmagURL	    Underlined
+  HiLink linuxmagEmail	    Underlined
+  HiLink linuxmagBoxBegin   Include
+  HiLink linuxmagBoxEnd	    Include
+  HiLink linuxmagNote	    Todo
+  HiLink linuxmagComment1   Comment
+  HiLink linuxmagComment2   Comment
+  HiLink linuxmagEditor     Debug
+
+  delcommand HiLink
+endif
+
+" finish
+let b:current_syntax = "linuxmag"
+>
+
+[ END LISTING 1 ]
